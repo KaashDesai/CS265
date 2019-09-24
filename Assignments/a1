@@ -1,0 +1,54 @@
+function traverse
+{
+xml="$1/dir.xml"
+echo '<?xml version="1.0" encoding="ISO-8859-1"?>' > "$xml"
+echo '<direntry>' >> "$xml"
+
+if [[ -f "$1/README" ]] ; then
+	#get index and required from README
+	"$(dirname "$0")/ReadmeParser" "$1/README" >> "$xml"
+
+	getOthers "$1"
+elif [[ $(find "$1" -mindepth 1 ! -name dir.xml) ]] ; then # dont add <other> if empty dir
+	getOthers "$1"
+fi
+echo '</direntry>' >> "$xml"
+
+#after processing items in this dir, process subdirs
+for file in "$1"/* ; do
+	if [ -d "$file" ] ; then
+		traverse "${file}"
+	fi
+done
+}
+
+function getOthers
+{
+echo -e '\t<other>' >> "$xml"
+#list dirs first
+find "$1" -maxdepth 1 -mindepth 1 -type d -printf "%f\n" | sort |
+	while IFS= read -r line ; do
+		#only add dirs not in README
+		if ! grep -q "<dir>$line" "$xml" ; then
+			echo -e "\t\t<dir>$line</dir>" >> "$xml"
+		fi
+	done
+find "$1" -maxdepth 1 -mindepth 1 -type f ! -name "dir.xml" -printf "%f\n" | sort |
+	while IFS= read -r line ; do
+		#only add files not in README
+		if ! grep -q "<file>$line" "$xml" ; then
+			echo -e "\t\t<file>$line</file>" >> "$xml"
+		fi
+	done
+echo -e '\t</other>' >> "$xml"
+}
+
+dir="$PWD/"
+echo "$(dirname "$0")/ReadmeParser"
+[[ "$#" = 1 ]] && dir="$1"
+[[ "$#" > 1 ]] && echo "Either specifiy one or no paths" && exit 1
+[[ ! -d "$dir" ]] && echo "Directory does not exit" && exit 2
+
+traverse "$dir"
+
+#EOF
